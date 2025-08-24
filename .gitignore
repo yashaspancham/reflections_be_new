@@ -1,0 +1,32 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+refenv/
+venv/
+
+# Database files
+db.sqlite3
+refDB
+
+# Django static files
+staticfiles/
+
+# Environment variables
+*.env
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Test outputs / temporary files
+test/result_images/
+test/test_images/
