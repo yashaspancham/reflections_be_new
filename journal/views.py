@@ -8,7 +8,7 @@ from .serializers import EntrySerializer
 from diff_match_patch import diff_match_patch
 import urllib
 from journal.utils import generate_title_and_img_url, html_to_text
-
+import traceback
 
 class JournalPagination(PageNumberPagination):
     page_size = 8
@@ -55,7 +55,6 @@ def list_entries_api(request):
         )
 
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -87,9 +86,7 @@ def update_entry_content(request):
     entry_id = request.data.get("entry_id")
 
     if not entry_id:
-        return Response(
-            {"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         entry = Entry.objects.get(id=entry_id)
@@ -108,6 +105,33 @@ def update_entry_content(request):
         entry.save()
         return Response({"msg": "Success"}, status=status.HTTP_200_OK)
     except Exception:
-        return Response(
-            {"error": "Unable to save"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": "Unable to save"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+@api_view(["GET"])
+def get_entry_by_id(request):
+    try:
+        entry_id = request.query_params.get("entry_id")
+        entry = Entry.objects.get(id=entry_id)
+        serializer = EntrySerializer(entry)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Entry.DoesNotExist:
+        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(["DELETE"])
+def delete_entry(request):
+    try:
+        entry_id = request.query_params.get("entry_id")
+        entry = Entry.objects.get(id=entry_id)
+        entry.delete()
+        return Response({"message": "Entry deleted"}, status=status.HTTP_200_OK)
+    except Entry.DoesNotExist:
+        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
