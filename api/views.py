@@ -14,7 +14,7 @@ from diff_match_patch import diff_match_patch
 from journal.models import Entry, Task
 from api.utils import list_s3_files
 load_dotenv()
-s3_client = boto3.client("s3", region_name="ap-south-1")
+s3_client = boto3.client("s3", region_name=os.getenv("AWS_REGION"))
 BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 
 
