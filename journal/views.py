@@ -14,19 +14,37 @@ from journal.utils import (
     refresh_all_img_urls,
 )
 import traceback
+from django.db.models import Q
 
 
 class JournalPagination(PageNumberPagination):
     page_size = 8
 
 
+
 @api_view(["GET"])
 def list_entries_api(request):
     try:
-        entries = Entry.objects.all().order_by("-lastUpdated")
+        sort = request.query_params.get("sort", "-lastUpdated")
+        search = request.query_params.get("search", "")
+        entries = Entry.objects.all()
+        if search:
+            entries = entries.filter(entryContent__icontains=search)
+        entries = entries.order_by(sort)
         paginator = JournalPagination()
+        page_num = int(request.query_params.get("page", 1))
+        total_entries = entries.count()
+        last_page = max(1, (total_entries + paginator.page_size - 1) // paginator.page_size)
+        # if requested page > last_page → clamp it
+        if page_num > last_page:
+            page_num = last_page
+        request.GET._mutable = True
+        request.GET["page"] = str(page_num)
+        request.GET._mutable = False
+
         result_page = paginator.paginate_queryset(entries, request)
         serializer = EntrySerializer(result_page, many=True)
+
         custom_entries = []
         for entry in serializer.data:
             content = entry.get("entryContent", "")
@@ -49,12 +67,13 @@ def list_entries_api(request):
         return Response(
             {
                 "success": True,
-                "total_entries": paginator.page.paginator.count,
-                "total_pages": paginator.page.paginator.num_pages,
-                "current_page": paginator.page.number,
+                "total_entries": total_entries,
+                "total_pages": last_page,
+                "current_page": page_num,
                 "next_page": paginator.get_next_link(),
                 "prev_page": paginator.get_previous_link(),
                 "entries": custom_entries,
+                "clamped": page_num == last_page,  # 👈 extra flag
             },
             status=status.HTTP_200_OK,
         )
@@ -62,6 +81,8 @@ def list_entries_api(request):
     except Exception as e:
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 @api_view(["POST"])
@@ -126,8 +147,6 @@ def get_entry_by_id(request):
             "createdAt": serializer.data["createdAt"],
             "lastUpdated": serializer.data["lastUpdated"],
         }
-        print("custom_entry_data: ", custom_entry_data)
-        print("\n\n")
         return Response(custom_entry_data, status=status.HTTP_200_OK)
     except Entry.DoesNotExist:
         return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
