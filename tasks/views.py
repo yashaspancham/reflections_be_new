@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view
 from .models import Task
 from .serializers import TaskSerializer
 from rest_framework import status
-
+import traceback
 
 class TaskPagination(PageNumberPagination):
     page_size = 35
@@ -14,31 +14,52 @@ class TaskPagination(PageNumberPagination):
 @api_view(["GET"])
 def get_tasks(request):
     try:
-        tasks = Task.objects.all().order_by("-createdAt")
+        sort = request.query_params.get("sort", "-lastUpdated")
+        search = request.query_params.get("search", "")
+        status_filter = request.query_params.get("status", "")
+        tasks = Task.objects.all()
+        if search:
+            tasks = tasks.filter(description__icontains=search)
+        if status_filter:
+            tasks = tasks.filter(status=status_filter)
+        tasks = tasks.order_by(sort)
+
         paginator = TaskPagination()
-        paginated_tasks = paginator.paginate_queryset(tasks, request)
+        page_num = int(request.query_params.get("page", 1))
+        total_entries = tasks.count()
+        last_page = max(1, (total_entries + paginator.page_size - 1) // paginator.page_size)
 
-        serializer = TaskSerializer(paginated_tasks, many=True)
+        # clamp page number
+        if page_num > last_page:
+            page_num = last_page
+        elif page_num < 1:
+            page_num = 1
 
-        page_obj = paginator.page
-        total_entries = page_obj.paginator.count
-        total_pages = page_obj.paginator.num_pages
-        current_page = page_obj.number
+        request.GET._mutable = True
+        request.GET["page"] = str(page_num)
+        request.GET._mutable = False
+
+        result_page = paginator.paginate_queryset(tasks, request)
+        serializer = TaskSerializer(result_page, many=True)
 
         return Response(
             {
                 "success": True,
                 "total_entries": total_entries,
-                "total_pages": total_pages,
-                "current_page": current_page,
+                "total_pages": last_page,
+                "current_page": page_num,
                 "next_page": paginator.get_next_link(),
                 "prev_page": paginator.get_previous_link(),
                 "tasks": serializer.data,
+                "clamped": page_num == last_page,
             },
             status=status.HTTP_200_OK,
         )
+
     except Exception as e:
+        traceback.print_exc()
         return Response(
             {"success": False, "error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
