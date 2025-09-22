@@ -32,6 +32,7 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     "journal",
+    "tasks",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -76,6 +77,7 @@ WSGI_APPLICATION = "reflectionsBE.wsgi.application"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
+    #this is for local only
     "default": {
         "ENGINE": "django.db.backends.mysql",
         "NAME": "refDB",

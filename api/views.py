@@ -11,7 +11,7 @@ import urllib.parse
 from dotenv import load_dotenv
 import json
 from diff_match_patch import diff_match_patch
-from journal.models import Entry, Task
+from journal.models import Entry
 from api.utils import list_s3_files
 load_dotenv()
 s3_client = boto3.client("s3", region_name=os.getenv("AWS_REGION"))

@@ -3,7 +3,6 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .models import Entry
 from rest_framework import status
-from .models import Entry
 from .serializers import EntrySerializer
 from diff_match_patch import diff_match_patch
 import urllib
@@ -73,7 +72,7 @@ def list_entries_api(request):
                 "next_page": paginator.get_next_link(),
                 "prev_page": paginator.get_previous_link(),
                 "entries": custom_entries,
-                "clamped": page_num == last_page,  # 👈 extra flag
+                "clamped": page_num == last_page,
             },
             status=status.HTTP_200_OK,
         )
