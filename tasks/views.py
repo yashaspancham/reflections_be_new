@@ -7,6 +7,7 @@ from .serializers import TaskSerializer
 from rest_framework import status
 import traceback
 
+
 class TaskPagination(PageNumberPagination):
     page_size = 35
 
@@ -27,7 +28,9 @@ def get_tasks(request):
         paginator = TaskPagination()
         page_num = int(request.query_params.get("page", 1))
         total_entries = tasks.count()
-        last_page = max(1, (total_entries + paginator.page_size - 1) // paginator.page_size)
+        last_page = max(
+            1, (total_entries + paginator.page_size - 1) // paginator.page_size
+        )
 
         # clamp page number
         if page_num > last_page:
@@ -63,3 +66,74 @@ def get_tasks(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+
+@api_view(["POST"])
+def add_task(request):
+    try:
+        serializer = TaskSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"success": True, "task": serializer.data},
+                status=status.HTTP_201_CREATED,
+            )
+        traceback.print_exc()
+        return Response(
+            {"success": False, "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        return Response(
+            {"success": False, "error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["PUT"])
+def update_task(request, task_id):
+    try:
+        task = Task.objects.get(pk=task_id)
+        serializer = TaskSerializer(task, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"success": True, "task": serializer.data},
+                status=status.HTTP_200_OK,
+            )
+        return Response(
+            {"success": False, "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except Task.DoesNotExist:
+        return Response(
+            {"success": False, "error": "Task not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        return Response(
+            {"success": False, "error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["DELETE"])
+def delete_task(request, task_id):
+    try:
+        task = Task.objects.get(id=task_id)
+        task.delete()
+        return Response(
+            {"success": True, "message": "Task deleted successfully"},
+            status=status.HTTP_200_OK,
+        )
+    except Task.DoesNotExist:
+        return Response(
+            {"success": False, "error": "Task not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        return Response(
+            {"success": False, "error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
