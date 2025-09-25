@@ -1,6 +1,8 @@
 from django.shortcuts import render
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
 from .models import Task
 from .serializers import TaskSerializer
@@ -13,12 +15,13 @@ class TaskPagination(PageNumberPagination):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_tasks(request):
     try:
         sort = request.query_params.get("sort", "-lastUpdated")
         search = request.query_params.get("search", "")
         status_filter = request.query_params.get("status", "")
-        tasks = Task.objects.all()
+        tasks = Task.objects.filter(user=request.user)
         if search:
             tasks = tasks.filter(description__icontains=search)
         if status_filter:
@@ -68,11 +71,12 @@ def get_tasks(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def add_task(request):
     try:
         serializer = TaskSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(user=request.user)
             return Response(
                 {"success": True, "task": serializer.data},
                 status=status.HTTP_201_CREATED,
@@ -91,6 +95,7 @@ def add_task(request):
 
 
 @api_view(["PUT"])
+@permission_classes([IsAuthenticated])
 def update_task(request, task_id):
     try:
         task = Task.objects.get(pk=task_id)
@@ -119,6 +124,7 @@ def update_task(request, task_id):
 
 
 @api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
 def delete_task(request, task_id):
     try:
         task = Task.objects.get(id=task_id)

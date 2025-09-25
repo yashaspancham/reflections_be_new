@@ -7,6 +7,8 @@ from botocore.exceptions import ClientError
 from django.http import JsonResponse
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 import urllib.parse
 from dotenv import load_dotenv
 import json
@@ -23,6 +25,7 @@ def hello(request):
 
 
 @csrf_exempt
+@permission_classes([IsAuthenticated])
 def upload_file_and_get_presigned_url(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST request required"}, status=400)
@@ -54,6 +57,7 @@ def upload_file_and_get_presigned_url(request):
 
 
 @csrf_exempt
+@permission_classes([IsAuthenticated])
 def list_presigned_urls(request):
     if request.method != "GET":
         return JsonResponse({"error": "GET request required"}, status=400)
@@ -74,6 +78,7 @@ def list_presigned_urls(request):
 
 
 @csrf_exempt
+@permission_classes([IsAuthenticated])
 def download_image(request):
     url = request.GET.get("url")
     if not url:
@@ -96,6 +101,7 @@ def download_image(request):
 
 
 @csrf_exempt
+@permission_classes([IsAuthenticated])
 def delete_image(request):
     if request.method == "DELETE":
         try:

@@ -1,6 +1,7 @@
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
 from .models import Entry
 from rest_framework import status
 from .serializers import EntrySerializer
@@ -20,20 +21,22 @@ class JournalPagination(PageNumberPagination):
     page_size = 8
 
 
-
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def list_entries_api(request):
     try:
         sort = request.query_params.get("sort", "-lastUpdated")
         search = request.query_params.get("search", "")
-        entries = Entry.objects.all()
+        entries = Entry.objects.filter(user=request.user)
         if search:
             entries = entries.filter(entryContent__icontains=search)
         entries = entries.order_by(sort)
         paginator = JournalPagination()
         page_num = int(request.query_params.get("page", 1))
         total_entries = entries.count()
-        last_page = max(1, (total_entries + paginator.page_size - 1) // paginator.page_size)
+        last_page = max(
+            1, (total_entries + paginator.page_size - 1) // paginator.page_size
+        )
         # if requested page > last_page → clamp it
         if page_num > last_page:
             page_num = last_page
@@ -82,9 +85,8 @@ def list_entries_api(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
-
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_entry_content(request):
     content = request.data.get("content", "")
 
@@ -94,7 +96,7 @@ def create_entry_content(request):
         )
 
     try:
-        entry = Entry.objects.create(entryContent=content)
+        entry = Entry.objects.create(user=request.user, entryContent=content)
         return Response(
             {"msg": "Success", "entry_id": entry.id}, status=status.HTTP_201_CREATED
         )
@@ -103,6 +105,7 @@ def create_entry_content(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def update_entry_content(request):
     patch_text = request.data.get("content", "")
     entry_id = request.data.get("entry_id")
@@ -135,6 +138,7 @@ def update_entry_content(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_entry_by_id(request):
     try:
         entry_id = request.query_params.get("entry_id")
@@ -155,6 +159,7 @@ def get_entry_by_id(request):
 
 
 @api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
 def delete_entry(request):
     try:
         entry_id = request.query_params.get("entry_id")
