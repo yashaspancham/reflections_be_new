@@ -3,6 +3,13 @@ from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
+import os
+import boto3
+from dotenv import load_dotenv
+
+load_dotenv()
+s3_client = boto3.client("s3", region_name=os.getenv("AWS_REGION"))
+BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 
 
 def get_tokens_for_user(user):
@@ -34,12 +41,24 @@ def signin(request):
         "email": user.email,
         "username": user.username,
     }
+    folder_exists = check_user_s3_folder(user.id)
+    if not folder_exists:
+        create_user_s3_folder(user.id)
 
     response = Response(
         {"msg": "Login successful", "tokens": tokens, "user_data": user_data},
         status=status.HTTP_200_OK,
     )
     return response
+
+def check_user_s3_folder(user_id: str) -> bool:
+    folder_key = f"uploads/{user_id}/"
+    response = s3_client.list_objects_v2(
+        Bucket=BUCKET_NAME,
+        Prefix=folder_key,
+        MaxKeys=1
+    )
+    return "Contents" in response
 
 
 @api_view(["POST"])
@@ -77,7 +96,10 @@ def signup(request):
         )
 
     user = User.objects.create_user(username=email, email=email, password=password)
-    tokens = get_tokens_for_user(user)
-    return Response(
-        {"msg": "User created", "tokens": tokens}, status=status.HTTP_201_CREATED
-    )
+    create_user_s3_folder(user.id)
+    return Response({"msg": "User created"}, status=status.HTTP_201_CREATED)
+
+
+def create_user_s3_folder(user_id: str):
+    folder_key = f"uploads/user-{user_id}/"
+    s3_client.put_object(Bucket=BUCKET_NAME, Key=folder_key)  #
