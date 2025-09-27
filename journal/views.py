@@ -12,6 +12,7 @@ from journal.utils import (
     generate_img_url,
     html_to_text,
     refresh_all_img_urls,
+    get_user_id_from_request,
 )
 import traceback
 from django.db.models import Q
@@ -97,6 +98,9 @@ def create_entry_content(request):
 
     try:
         entry = Entry.objects.create(user=request.user, entryContent=content)
+        if entry.user != request.user:
+            entry.delete()
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
         return Response(
             {"msg": "Success", "entry_id": entry.id}, status=status.HTTP_201_CREATED
         )
@@ -115,19 +119,24 @@ def update_entry_content(request):
             {"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST
         )
 
+    user_id = get_user_id_from_request(request)
+
     try:
-        entry = Entry.objects.get(id=entry_id)
+        entry = Entry.objects.get(id=entry_id, user_id=user_id)
     except Entry.DoesNotExist:
-        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Entry not found or not owned by user"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     patch_text = urllib.parse.unquote(patch_text)
     oldHTML = entry.entryContent
 
     dmp = diff_match_patch()
-    patches = dmp.patch_fromText(patch_text)
-    newHTML, _ = dmp.patch_apply(patches, oldHTML)
-
     try:
+        patches = dmp.patch_fromText(patch_text)
+        newHTML, _ = dmp.patch_apply(patches, oldHTML)
+
         entry.entryContent = newHTML
         entry.save()
         return Response({"msg": "Success"}, status=status.HTTP_200_OK)
@@ -137,12 +146,23 @@ def update_entry_content(request):
         )
 
 
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_entry_by_id(request):
     try:
         entry_id = request.query_params.get("entry_id")
-        entry = Entry.objects.get(id=entry_id)
+        if not entry_id:
+            return Response(
+                {"error": "Entry ID required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user_id = get_user_id_from_request(request)
+
+        # Only fetch entry if it belongs to the logged-in user
+        entry = Entry.objects.get(id=entry_id, user_id=user_id)
+
         serializer = EntrySerializer(entry)
         custom_entry_data = {
             "id": serializer.data["id"],
@@ -151,11 +171,16 @@ def get_entry_by_id(request):
             "lastUpdated": serializer.data["lastUpdated"],
         }
         return Response(custom_entry_data, status=status.HTTP_200_OK)
+
     except Entry.DoesNotExist:
-        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Entry not found or not owned by user"},
+            status=status.HTTP_404_NOT_FOUND
+        )
     except Exception as e:
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 @api_view(["DELETE"])
@@ -163,11 +188,25 @@ def get_entry_by_id(request):
 def delete_entry(request):
     try:
         entry_id = request.query_params.get("entry_id")
-        entry = Entry.objects.get(id=entry_id)
+        if not entry_id:
+            return Response(
+                {"error": "Entry ID required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user_id = get_user_id_from_request(request)
+
+        # Only delete if entry belongs to this user
+        entry = Entry.objects.get(id=entry_id, user_id=user_id)
         entry.delete()
+
         return Response({"message": "Entry deleted"}, status=status.HTTP_200_OK)
+
     except Entry.DoesNotExist:
-        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Entry not found or not owned by user"},
+            status=status.HTTP_404_NOT_FOUND
+        )
     except Exception as e:
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

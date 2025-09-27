@@ -36,34 +36,28 @@ def signin(request):
         )
 
     tokens = get_tokens_for_user(user)
-    user_data = {
-        "id": user.id,
-        "email": user.email,
-        "username": user.username,
-    }
     folder_exists = check_user_s3_folder(user.id)
     if not folder_exists:
         create_user_s3_folder(user.id)
 
     response = Response(
-        {"msg": "Login successful", "tokens": tokens, "user_data": user_data},
+        {"msg": "Login successful", "tokens": tokens},
         status=status.HTTP_200_OK,
     )
     return response
 
+
 def check_user_s3_folder(user_id: str) -> bool:
     folder_key = f"uploads/{user_id}/"
     response = s3_client.list_objects_v2(
-        Bucket=BUCKET_NAME,
-        Prefix=folder_key,
-        MaxKeys=1
+        Bucket=BUCKET_NAME, Prefix=folder_key, MaxKeys=1
     )
     return "Contents" in response
 
 
 @api_view(["POST"])
 def refresh_access(request):
-    refresh_token = request.COOKIES.get("refreshToken")
+    refresh_token = request.data.get("refresh") 
     if not refresh_token:
         return Response(
             {"error": "No refresh token"}, status=status.HTTP_401_UNAUTHORIZED
@@ -72,7 +66,10 @@ def refresh_access(request):
     try:
         refresh = RefreshToken(refresh_token)
         new_access = str(refresh.access_token)
-        return Response({"access": new_access}, status=status.HTTP_200_OK)
+        new_refresh = str(refresh)
+        return Response(
+            {"access": new_access, "refresh": new_refresh}, status=status.HTTP_200_OK
+        )
     except TokenError:
         return Response(
             {"error": "Invalid refresh token. Please sign in again."},

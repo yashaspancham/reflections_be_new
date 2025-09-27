@@ -3,6 +3,7 @@ import boto3
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+from rest_framework_simplejwt.tokens import AccessToken
 
 load_dotenv()
 s3_client = boto3.client("s3", region_name=os.getenv("AWS_REGION"))
@@ -61,3 +62,13 @@ def refresh_presigned_url(url: str):
         ExpiresIn=3600,
     )
     return presigned_url
+
+def get_user_id_from_request(request):
+    auth_header = request.headers.get(
+        "Authorization"
+    )
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        access_token = AccessToken(token)
+        return access_token["user_id"]
+    return None

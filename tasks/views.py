@@ -76,9 +76,9 @@ def add_task(request):
     try:
         serializer = TaskSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=request.user)
+            task = serializer.save(user=request.user)
             return Response(
-                {"success": True, "task": serializer.data},
+                {"success": True, "task": TaskSerializer(task).data},
                 status=status.HTTP_201_CREATED,
             )
         traceback.print_exc()
@@ -98,10 +98,11 @@ def add_task(request):
 @permission_classes([IsAuthenticated])
 def update_task(request, task_id):
     try:
-        task = Task.objects.get(pk=task_id)
+        task = Task.objects.get(pk=task_id, user=request.user)
+
         serializer = TaskSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(user=request.user)
             return Response(
                 {"success": True, "task": serializer.data},
                 status=status.HTTP_200_OK,
@@ -112,7 +113,7 @@ def update_task(request, task_id):
         )
     except Task.DoesNotExist:
         return Response(
-            {"success": False, "error": "Task not found"},
+            {"success": False, "error": "Task not found or unauthorized"},
             status=status.HTTP_404_NOT_FOUND,
         )
     except Exception as e:
@@ -123,11 +124,13 @@ def update_task(request, task_id):
         )
 
 
+
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_task(request, task_id):
     try:
-        task = Task.objects.get(id=task_id)
+        # only fetch task owned by this user
+        task = Task.objects.get(id=task_id, user=request.user)
         task.delete()
         return Response(
             {"success": True, "message": "Task deleted successfully"},
@@ -135,11 +138,13 @@ def delete_task(request, task_id):
         )
     except Task.DoesNotExist:
         return Response(
-            {"success": False, "error": "Task not found"},
+            {"success": False, "error": "Task not found or unauthorized"},
             status=status.HTTP_404_NOT_FOUND,
         )
     except Exception as e:
+        traceback.print_exc()
         return Response(
             {"success": False, "error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
