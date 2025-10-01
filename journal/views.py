@@ -13,6 +13,11 @@ from journal.utils import (
     html_to_text,
     refresh_all_img_urls,
     get_user_id_from_request,
+    get_entries_this_week,
+    get_total_letters_this_week,
+    get_total_words_this_week,
+    get_average_words_per_entry_this_week,
+    get_average_letters_per_entry,
 )
 import traceback
 from django.db.models import Q
@@ -146,7 +151,6 @@ def update_entry_content(request):
         )
 
 
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_entry_by_id(request):
@@ -154,8 +158,7 @@ def get_entry_by_id(request):
         entry_id = request.query_params.get("entry_id")
         if not entry_id:
             return Response(
-                {"error": "Entry ID required"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         user_id = get_user_id_from_request(request)
@@ -175,12 +178,11 @@ def get_entry_by_id(request):
     except Entry.DoesNotExist:
         return Response(
             {"error": "Entry not found or not owned by user"},
-            status=status.HTTP_404_NOT_FOUND
+            status=status.HTTP_404_NOT_FOUND,
         )
     except Exception as e:
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 @api_view(["DELETE"])
@@ -190,8 +192,7 @@ def delete_entry(request):
         entry_id = request.query_params.get("entry_id")
         if not entry_id:
             return Response(
-                {"error": "Entry ID required"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         user_id = get_user_id_from_request(request)
@@ -205,8 +206,31 @@ def delete_entry(request):
     except Entry.DoesNotExist:
         return Response(
             {"error": "Entry not found or not owned by user"},
-            status=status.HTTP_404_NOT_FOUND
+            status=status.HTTP_404_NOT_FOUND,
         )
+    except Exception as e:
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def entry_stats(request):
+    try:
+        user = request.user
+        streak_data = get_streaks(user)
+        data = {
+            "entries_this_week": get_entries_this_week(user),
+            "total_words_this_week": get_total_words_this_week(user),
+            "total_letters_this_week": get_total_letters_this_week(user),
+            "average_words_per_entry_this_week": get_average_words_per_entry_this_week(
+                user
+            ),
+            "average_letters_per_entry": get_average_letters_per_entry(user),
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
     except Exception as e:
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

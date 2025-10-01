@@ -8,6 +8,12 @@ from .models import Task
 from .serializers import TaskSerializer
 from rest_framework import status
 import traceback
+from .utils import (
+    get_tasks_completed_this_week,
+    get_tasks_in_progress,
+    get_tasks_due_this_week,
+    get_tasks_due_this_week,
+)
 
 
 class TaskPagination(PageNumberPagination):
@@ -124,12 +130,10 @@ def update_task(request, task_id):
         )
 
 
-
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_task(request, task_id):
     try:
-        # only fetch task owned by this user
         task = Task.objects.get(id=task_id, user=request.user)
         task.delete()
         return Response(
@@ -148,3 +152,21 @@ def delete_task(request, task_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_task_stats(request):
+    try:
+        user = request.user
+
+        stats = {
+            "tasks_completed_this_week": get_tasks_completed_this_week(user),
+            "tasks_in_progress": get_tasks_in_progress(user),
+            "tasks_due_this_week": get_tasks_due_this_week(user),
+            "total_tasks_completed": get_total_tasks_completed(user),
+        }
+
+        return Response(stats, status=200)
+    except Exception as e:
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=500)
