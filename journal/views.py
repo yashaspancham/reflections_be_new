@@ -18,6 +18,8 @@ from journal.utils import (
     get_total_words_this_week,
     get_average_words_per_entry_this_week,
     get_average_letters_per_entry,
+    get_total_letters_this_week,
+    get_streaks,
 )
 import traceback
 from django.db.models import Q
@@ -226,7 +228,8 @@ def entry_stats(request):
             "average_words_per_entry_this_week": get_average_words_per_entry_this_week(
                 user
             ),
-            "average_letters_per_entry": get_average_letters_per_entry(user),
+            "Current_streak":streak_data["current_streak"],
+            "Longest_streak":streak_data["longest_streak"],
         }
 
         return Response(data, status=status.HTTP_200_OK)

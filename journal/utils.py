@@ -88,13 +88,16 @@ def get_total_entries(user):
 
 def get_entries_this_week(user):
     try:
-        today = timezone.now().date()
+        today = timezone.localdate()
         start_of_week = today - timedelta(days=today.weekday())
-        return (
-            Entry.objects.filter(user=user, created_at__date__gte=start_of_week).count()
-            or 0
-        )
-    except Exception:
+        end_of_week = start_of_week + timedelta(days=6)
+
+        return Entry.objects.filter(
+            user=user,
+            createdAt__date__range=(start_of_week, end_of_week)
+        ).count() or 0
+    except Exception as e:
+        print("Error in get_entries_this_week:", e)
         return 0
 
 
@@ -104,7 +107,7 @@ def get_entries_this_month(user):
         start_of_month = today.replace(day=1)
         return (
             Entry.objects.filter(
-                user=user, created_at__date__gte=start_of_month
+                user=user, createdAt__date__gte=start_of_month
             ).count()
             or 0
         )
@@ -117,7 +120,7 @@ def get_entries_this_year(user):
         today = timezone.now().date()
         start_of_year = today.replace(month=1, day=1)
         return (
-            Entry.objects.filter(user=user, created_at__date__gte=start_of_year).count()
+            Entry.objects.filter(user=user, createdAt__date__gte=start_of_year).count()
             or 0
         )
     except Exception:

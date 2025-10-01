@@ -12,7 +12,7 @@ from .utils import (
     get_tasks_completed_this_week,
     get_tasks_in_progress,
     get_tasks_due_this_week,
-    get_tasks_due_this_week,
+    get_total_tasks_completed,
 )
 
 
