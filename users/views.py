@@ -16,13 +16,18 @@ BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 def get_tokens_for_user(user):
     try:
         refresh = RefreshToken.for_user(user)
+        access = refresh.access_token  # This is correct
+
         return {
             "refresh": str(refresh),
-            "access": str(refresh.access_token),
+            "access": str(access),
         }
     except Exception as e:
+        import traceback
+
         traceback.print_exc()
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Use DRF Response only in views
+        return {"error": str(e)}
 
 
 @api_view(["POST"])
