@@ -4,7 +4,8 @@ from .views import (
     create_entry_content,
     update_entry_content,
     get_entry_by_id,
-    delete_entry
+    delete_entry,
+    entry_stats
 )
 
 urlpatterns = [
@@ -13,5 +14,5 @@ urlpatterns = [
     path("updateEntry/", update_entry_content, name="update_entry_content"),
     path("getEntryById/", get_entry_by_id, name="get_entry_by_id"),
     path("deleteEntry/", delete_entry, name="delete_entry"),
-
+    path("entry_stats/",entry_stats,name="entry_stats"),
 ]

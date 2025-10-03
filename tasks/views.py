@@ -1,11 +1,19 @@
 from django.shortcuts import render
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
 from .models import Task
 from .serializers import TaskSerializer
 from rest_framework import status
 import traceback
+from .utils import (
+    get_tasks_completed_this_week,
+    get_tasks_in_progress,
+    get_tasks_due_this_week,
+    get_total_tasks_completed,
+)
 
 
 class TaskPagination(PageNumberPagination):
@@ -13,12 +21,13 @@ class TaskPagination(PageNumberPagination):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_tasks(request):
     try:
         sort = request.query_params.get("sort", "-lastUpdated")
         search = request.query_params.get("search", "")
         status_filter = request.query_params.get("status", "")
-        tasks = Task.objects.all()
+        tasks = Task.objects.filter(user=request.user)
         if search:
             tasks = tasks.filter(description__icontains=search)
         if status_filter:
@@ -68,13 +77,14 @@ def get_tasks(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def add_task(request):
     try:
         serializer = TaskSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            task = serializer.save(user=request.user)
             return Response(
-                {"success": True, "task": serializer.data},
+                {"success": True, "task": TaskSerializer(task).data},
                 status=status.HTTP_201_CREATED,
             )
         traceback.print_exc()
@@ -91,12 +101,14 @@ def add_task(request):
 
 
 @api_view(["PUT"])
+@permission_classes([IsAuthenticated])
 def update_task(request, task_id):
     try:
-        task = Task.objects.get(pk=task_id)
+        task = Task.objects.get(pk=task_id, user=request.user)
+
         serializer = TaskSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(user=request.user)
             return Response(
                 {"success": True, "task": serializer.data},
                 status=status.HTTP_200_OK,
@@ -107,7 +119,7 @@ def update_task(request, task_id):
         )
     except Task.DoesNotExist:
         return Response(
-            {"success": False, "error": "Task not found"},
+            {"success": False, "error": "Task not found or unauthorized"},
             status=status.HTTP_404_NOT_FOUND,
         )
     except Exception as e:
@@ -119,9 +131,10 @@ def update_task(request, task_id):
 
 
 @api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
 def delete_task(request, task_id):
     try:
-        task = Task.objects.get(id=task_id)
+        task = Task.objects.get(id=task_id, user=request.user)
         task.delete()
         return Response(
             {"success": True, "message": "Task deleted successfully"},
@@ -129,11 +142,31 @@ def delete_task(request, task_id):
         )
     except Task.DoesNotExist:
         return Response(
-            {"success": False, "error": "Task not found"},
+            {"success": False, "error": "Task not found or unauthorized"},
             status=status.HTTP_404_NOT_FOUND,
         )
     except Exception as e:
+        traceback.print_exc()
         return Response(
             {"success": False, "error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_task_stats(request):
+    try:
+        user = request.user
+
+        stats = {
+            "tasks_completed_this_week": get_tasks_completed_this_week(user),
+            "tasks_in_progress": get_tasks_in_progress(user),
+            "tasks_due_this_week": get_tasks_due_this_week(user),
+            "total_tasks_completed": get_total_tasks_completed(user),
+        }
+
+        return Response(stats, status=200)
+    except Exception as e:
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=500)

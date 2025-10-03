@@ -1,6 +1,7 @@
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
 from .models import Entry
 from rest_framework import status
 from .serializers import EntrySerializer
@@ -11,6 +12,14 @@ from journal.utils import (
     generate_img_url,
     html_to_text,
     refresh_all_img_urls,
+    get_user_id_from_request,
+    get_entries_this_week,
+    get_total_letters_this_week,
+    get_total_words_this_week,
+    get_average_words_per_entry_this_week,
+    get_average_letters_per_entry,
+    get_total_letters_this_week,
+    get_streaks,
 )
 import traceback
 from django.db.models import Q
@@ -20,20 +29,22 @@ class JournalPagination(PageNumberPagination):
     page_size = 8
 
 
-
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def list_entries_api(request):
     try:
         sort = request.query_params.get("sort", "-lastUpdated")
         search = request.query_params.get("search", "")
-        entries = Entry.objects.all()
+        entries = Entry.objects.filter(user=request.user)
         if search:
             entries = entries.filter(entryContent__icontains=search)
         entries = entries.order_by(sort)
         paginator = JournalPagination()
         page_num = int(request.query_params.get("page", 1))
         total_entries = entries.count()
-        last_page = max(1, (total_entries + paginator.page_size - 1) // paginator.page_size)
+        last_page = max(
+            1, (total_entries + paginator.page_size - 1) // paginator.page_size
+        )
         # if requested page > last_page → clamp it
         if page_num > last_page:
             page_num = last_page
@@ -82,9 +93,8 @@ def list_entries_api(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
-
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_entry_content(request):
     content = request.data.get("content", "")
 
@@ -94,7 +104,10 @@ def create_entry_content(request):
         )
 
     try:
-        entry = Entry.objects.create(entryContent=content)
+        entry = Entry.objects.create(user=request.user, entryContent=content)
+        if entry.user != request.user:
+            entry.delete()
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
         return Response(
             {"msg": "Success", "entry_id": entry.id}, status=status.HTTP_201_CREATED
         )
@@ -103,6 +116,7 @@ def create_entry_content(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def update_entry_content(request):
     patch_text = request.data.get("content", "")
     entry_id = request.data.get("entry_id")
@@ -112,19 +126,24 @@ def update_entry_content(request):
             {"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST
         )
 
+    user_id = get_user_id_from_request(request)
+
     try:
-        entry = Entry.objects.get(id=entry_id)
+        entry = Entry.objects.get(id=entry_id, user_id=user_id)
     except Entry.DoesNotExist:
-        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Entry not found or not owned by user"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     patch_text = urllib.parse.unquote(patch_text)
     oldHTML = entry.entryContent
 
     dmp = diff_match_patch()
-    patches = dmp.patch_fromText(patch_text)
-    newHTML, _ = dmp.patch_apply(patches, oldHTML)
-
     try:
+        patches = dmp.patch_fromText(patch_text)
+        newHTML, _ = dmp.patch_apply(patches, oldHTML)
+
         entry.entryContent = newHTML
         entry.save()
         return Response({"msg": "Success"}, status=status.HTTP_200_OK)
@@ -135,10 +154,20 @@ def update_entry_content(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_entry_by_id(request):
     try:
         entry_id = request.query_params.get("entry_id")
-        entry = Entry.objects.get(id=entry_id)
+        if not entry_id:
+            return Response(
+                {"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user_id = get_user_id_from_request(request)
+
+        # Only fetch entry if it belongs to the logged-in user
+        entry = Entry.objects.get(id=entry_id, user_id=user_id)
+
         serializer = EntrySerializer(entry)
         custom_entry_data = {
             "id": serializer.data["id"],
@@ -147,22 +176,64 @@ def get_entry_by_id(request):
             "lastUpdated": serializer.data["lastUpdated"],
         }
         return Response(custom_entry_data, status=status.HTTP_200_OK)
+
     except Entry.DoesNotExist:
-        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Entry not found or not owned by user"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
     except Exception as e:
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
 def delete_entry(request):
     try:
         entry_id = request.query_params.get("entry_id")
-        entry = Entry.objects.get(id=entry_id)
+        if not entry_id:
+            return Response(
+                {"error": "Entry ID required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user_id = get_user_id_from_request(request)
+
+        # Only delete if entry belongs to this user
+        entry = Entry.objects.get(id=entry_id, user_id=user_id)
         entry.delete()
+
         return Response({"message": "Entry deleted"}, status=status.HTTP_200_OK)
+
     except Entry.DoesNotExist:
-        return Response({"error": "Entry not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Entry not found or not owned by user"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def entry_stats(request):
+    try:
+        user = request.user
+        streak_data = get_streaks(user)
+        data = {
+            "entries_this_week": get_entries_this_week(user),
+            "total_words_this_week": get_total_words_this_week(user),
+            "total_letters_this_week": get_total_letters_this_week(user),
+            "average_words_per_entry_this_week": get_average_words_per_entry_this_week(
+                user
+            ),
+            "Current_streak":streak_data["current_streak"],
+            "Longest_streak":streak_data["longest_streak"],
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
     except Exception as e:
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
