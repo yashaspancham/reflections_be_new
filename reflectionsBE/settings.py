@@ -112,9 +112,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 # This should solve cors
-CORS_ALLOWED_ORIGINS = [
-    os.getenv("CORS_ALLOWED_ORIGINS"),
-]
+CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOWED_ORIGINS = [
+#     os.getenv("CORS_ALLOWED_ORIGINS"),
+# ]
 
 
 # Internationalization

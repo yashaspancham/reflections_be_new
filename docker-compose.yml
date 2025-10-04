@@ -7,10 +7,8 @@ services:
     restart: always
     command: gunicorn reflectionsBE.wsgi:application --bind 0.0.0.0:8000 --workers 4
     ports:
-      - "8000:8000"   # Django server accessible on localhost:8000
+      - "8000:8000"   # Django accessible on host EC2 port 8000
     env_file:
-      - .env
+      - .env         # contains DB credentials pointing to remote MySQL EC2
     volumes:
       - .:/app
-    extra_hosts:
-      - "host.docker.internal:host-gateway"

@@ -7,9 +7,17 @@ from rest_framework_simplejwt.tokens import RefreshToken
 import os
 import boto3
 from dotenv import load_dotenv
+from django.contrib.auth.models import User
+import traceback
+
 
 load_dotenv()
-s3_client = boto3.client("s3", region_name=os.getenv("AWS_REGION"))
+s3_client = boto3.client(
+    "s3",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION")
+)
 BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 
 
@@ -35,6 +43,13 @@ def signin(request):
     email = request.data.get("email")
     password = request.data.get("password")
 
+    # Check if user exists first
+    if not User.objects.filter(email=email).exists():
+        return Response(
+            {"error": "User does not exist"}, status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Authenticate user
     user = authenticate(username=email, password=password)
     if not user:
         return Response(
@@ -46,11 +61,10 @@ def signin(request):
     if not folder_exists:
         create_user_s3_folder(user.id)
 
-    response = Response(
+    return Response(
         {"msg": "Login successful", "tokens": tokens},
         status=status.HTTP_200_OK,
     )
-    return response
 
 
 def check_user_s3_folder(user_id: str) -> bool:
@@ -89,11 +103,13 @@ def signup(request):
     password = request.data.get("password")
 
     if not email or not password:
+        traceback.print_exc()
         return Response(
             {"error": "Email and password required"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     if User.objects.filter(email=email).exists():
+        traceback.print_exc()
         return Response(
             {"error": "Email already exists"}, status=status.HTTP_400_BAD_REQUEST
         )
